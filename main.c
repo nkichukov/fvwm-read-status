@@ -13,6 +13,7 @@
 typedef struct {
     int number;
     int is_current;
+    int is_urgent;
     int num_of_clients;
 } desktop_t;
 
@@ -26,10 +27,12 @@ typedef struct {
     char desktop_mode[64];
 } screen_t;
 
+
 static screen_t screens[MAX_SCREENS];
 static int screen_count = 0;
 static char clock_line[1024] = "";
 static char global_desktop_mode[64] = "";
+static char global_current_screen[256] = "";
 
 static screen_t *find_or_create_screen(const char *name)
 {
@@ -66,6 +69,9 @@ static void build_message(screen_t *s)
             pos += snprintf(msg + pos, sizeof(msg) - pos,
                            "|%%{B#39c488} %d %%{B-}", d->number);
             current_clients = d->num_of_clients;
+        } else if (d->is_urgent) {
+            pos += snprintf(msg + pos, sizeof(msg) - pos,
+                           "|%%{B#FF0000} %d %%{B-}", d->number);
         } else if (d->num_of_clients > 0) {
             pos += snprintf(msg + pos, sizeof(msg) - pos,
                            "|%%{B#004C98} %d %%{B-}", d->number);
@@ -74,7 +80,8 @@ static void build_message(screen_t *s)
 
     pos += snprintf(msg + pos, sizeof(msg) - pos,
                    "%%{F#FF00FF}|%%{F-}"
-                   "%%{B#7F783E}[Scr:%s][N:%d][A:%d][L:%s]%%{B-}",
+                   "%%{B#7F783E}[CS:%s][Scr:%s][N:%d][A:%d][L:%s]%%{B-}",
+                   global_current_screen,
                    s->name, s->randr_order,
                    current_clients,
                    s->desktop_mode);
@@ -103,6 +110,11 @@ static void process_json(const char *line)
     if (dm && cJSON_IsString(dm))
         strncpy(global_desktop_mode, dm->valuestring,
                 sizeof(global_desktop_mode) - 1);
+
+    cJSON *cs = cJSON_GetObjectItem(root, "current_screen");
+    if (cs && cJSON_IsString(cs))
+        strncpy(global_current_screen, cs->valuestring,
+                sizeof(global_current_screen) - 1);
 
     cJSON *scr_obj = cJSON_GetObjectItem(root, "screens");
     if (!scr_obj || !cJSON_IsObject(scr_obj)) {
@@ -143,6 +155,8 @@ static void process_json(const char *line)
                 d->is_current = (ic && cJSON_IsTrue(ic)) ? 1 : 0;
                 cJSON *nc = cJSON_GetObjectItem(desk, "number_of_clients");
                 d->num_of_clients = (nc && cJSON_IsNumber(nc)) ? nc->valueint : 0;
+                cJSON *iu = cJSON_GetObjectItem(desk, "is_urgent");
+                d->is_urgent = (iu && cJSON_IsTrue(iu)) ? 1 : 0;
             }
         }
 
